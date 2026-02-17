@@ -9,6 +9,6 @@ data class tTaskEntity(
     @PrimaryKey(autoGenerate = true) val t_task_id: Int = 0, // [cite: 41]
     val task_name: String, // [cite: 42]
     val type: Int, // 1: 通常, 2: 日課 [cite: 43]
-    var is_completed: Boolean = false, // [cite: 44]
+    val is_completed: Boolean = false, // [cite: 44]
     val created_at: String // [cite: 45]
 )

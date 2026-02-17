@@ -4,23 +4,57 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.taskdego.data.dao.tTaskDao
 import com.example.taskdego.data.dao.tTrainerProfileDao
+import com.example.taskdego.data.dao.mItemDao
+import com.example.taskdego.data.dao.tItemDao
 import com.example.taskdego.data.entity.tTaskEntity
 import com.example.taskdego.data.entity.tTrainerProfileEntity
+import com.example.taskdego.data.entity.mItemEntity
+import com.example.taskdego.data.entity.tItemEntity
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class TaskViewModel(private val tTaskDao: tTaskDao, private val tTrainerProfileDao: tTrainerProfileDao): ViewModel() {
+class TaskViewModel(private val tTaskDao: tTaskDao,
+                    private val tTrainerProfileDao: tTrainerProfileDao,
+                    private val mItemDao: mItemDao,
+                    private val tItemDao: tItemDao
+    ): ViewModel() {
     val tasks = tTaskDao.getAllTasks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 //    val trainer = tTrainerProfileDao.getTrainer().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
 //        tTrainerProfileEntity())
 
-    // ★ 初期値のIDを1に設定します
+    // ★ 完了前のタスクのみを取得
+    val activeTasks = tTaskDao.getActiveTasks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val trainer = tTrainerProfileDao.getTrainer().stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         tTrainerProfileEntity(t_trainer_id = 1, trainer_name = "たろう", coins = 0, exp = 0)
     )
+
+    // ★ アイテム一覧を取得
+    val items = tItemDao.getAllItems().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    // ★ 修正：ItemWithQuantityのリストを返す
+    val itemsWithQuantity = tItemDao.getAllItemsWithQuantity().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    // ★ 報酬モーダル表示用の状態
+    private val _showRewardDialog = MutableStateFlow(false)
+    val showRewardDialog: StateFlow<Boolean> = _showRewardDialog.asStateFlow()
+
+    private val _rewardData = MutableStateFlow<RewardData?>(null)
+    val rewardData: StateFlow<RewardData?> = _rewardData.asStateFlow()
 
     fun addTask(name: String, type: Int){
         viewModelScope.launch{
@@ -37,31 +71,70 @@ class TaskViewModel(private val tTaskDao: tTaskDao, private val tTrainerProfileD
 
             val currentTrainer = trainer.value ?: return@launch
 
-            val trainerWithCorrectId = currentTrainer.copy(t_trainer_id = 1)
+//            val trainerWithCorrectId = currentTrainer.copy(t_trainer_id = 1)
 
             //報酬判定
             // type0はtask type1はroutine
             val count = if (task. type == 0) currentTrainer.daily_reword_count_task else currentTrainer.daily_reword_count_routine
 
-//            if (count < 10){
-// ★ .copyを使って「新しい状態」のトレーナーを作ります
-                val rewardedTrainer = trainerWithCorrectId.copy(
-                    t_trainer_id = 1, // IDを確実に1にする
-                    coins = trainerWithCorrectId.coins + 100,
-                    exp = trainerWithCorrectId.exp + 100,
-                    daily_reword_count_task = if (task.type == 0) trainerWithCorrectId.daily_reword_count_task + 1 else trainerWithCorrectId.daily_reword_count_task,
-                    daily_reword_count_routine = if (task.type == 0) trainerWithCorrectId.daily_reword_count_routine else trainerWithCorrectId.daily_reword_count_routine + 1
+            if (count < 10){
+                // 報酬の定義
+                val expReward = 100
+                val coinReward = 100
+                val itemId = 1 // モンスターボール
+                val itemQuantity = 1
+
+                // ★ .copyを使って「新しい状態」のトレーナーを作ります
+                val rewardedTrainer = currentTrainer.copy(
+//                    t_trainer_id = 1, // IDを確実に1にする
+                    coins = currentTrainer.coins + 100,
+                    exp = currentTrainer.exp + 100,
+                    daily_reword_count_task = if (task.type == 0) currentTrainer.daily_reword_count_task + 1 else currentTrainer.daily_reword_count_task,
+                    daily_reword_count_routine = if (task.type == 0) currentTrainer.daily_reword_count_routine else currentTrainer.daily_reword_count_routine + 1
                 )
 
-                // 報酬付与
-                // ボールの付与(アイテム管理は別途)
-//                currentTrainer.coins += 100
-//                currentTrainer.exp += 100
-//                if (task.type == 0) currentTrainer.daily_reword_count_task++ else currentTrainer.daily_reword_count_routine++
+                tTrainerProfileDao.updateTrainer(rewardedTrainer)
 
-                tTrainerProfileDao.updateTrainer(currentTrainer)
-//            }
+                // ★ アイテム報酬（モンスターボール1個）
+                addItem(m_item_id = 1, quantity = 1)
 
+                // ★ アイテム名を取得
+                val itemName = mItemDao.getItemById(itemId)?.item_name ?: "アイテム"
+
+                // ★ 報酬データを設定してモーダルを表示
+                _rewardData.value = RewardData(
+                    exp = expReward,
+                    coins = coinReward,
+                    itemName = itemName,
+                    itemQuantity = itemQuantity
+                )
+                _showRewardDialog.value = true
+            }
         }
+    }
+
+    // ★ モーダルを閉じる
+    fun dismissRewardDialog() {
+        _showRewardDialog.value = false
+        _rewardData.value = null
+    }
+
+    // ★ アイテム追加メソッド
+    suspend fun addItem(m_item_id: Int, quantity: Int) {
+        val existingItem = tItemDao.getItemByMasterId(m_item_id)
+        if (existingItem != null) {
+            // 既に持っている場合は個数を増やす
+            val updatedItem = existingItem.copy(quantity = existingItem.quantity + quantity)
+            tItemDao.updateItem(updatedItem)
+        } else {
+            // 新規追加
+            tItemDao.insertItem(tItemEntity(m_item_id = m_item_id, quantity = quantity))
+        }
+    }
+
+    // ★ アイテム名と個数を取得するヘルパー
+    suspend fun getItemWithName(tItem: tItemEntity): Pair<String, Int> {
+        val masterItem = mItemDao.getItemById(tItem.m_item_id)
+        return Pair(masterItem?.item_name ?: "不明なアイテム", tItem.quantity)
     }
 }

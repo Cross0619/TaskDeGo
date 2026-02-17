@@ -19,6 +19,10 @@ interface tTaskDao {
     @Query("Select * FROM t_tasks WHERE is_completed = 0")
     fun getActiveTasks(): Flow<List<tTaskEntity>>
 
+    // ★ 完了済みタスクを取得
+    @Query("SELECT * FROM t_tasks WHERE is_completed = 1 ORDER BY t_task_id DESC")
+    fun getCompletedTasks(): Flow<List<tTaskEntity>>
+
     @Update
     suspend fun updateTask(task: tTaskEntity)
 }

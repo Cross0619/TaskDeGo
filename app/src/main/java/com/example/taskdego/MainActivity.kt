@@ -7,11 +7,14 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.taskdego.data.AppDatabase
+import com.example.taskdego.ui.HomeScreen
 import com.example.taskdego.ui.TaskScreen
+import com.example.taskdego.ui.ItemScreen
 import com.example.taskdego.logic.TaskViewModel
 
 class MainActivity : ComponentActivity() {
@@ -23,13 +26,15 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(this)
         val tTaskDao = database.tTaskDao()
         val tTrainerProfileDao = database.tTrainerProfileDao()
+        val mItemDao = database.mItemDao()  // ★ 追加
+        val tItemDao = database.tItemDao()  // ★ 追加
 
         // 2. ViewModelの初期化
         // Factoryを使って、ViewModelにDao（データベースの窓口）を渡します
         val viewModel: TaskViewModel by viewModels {
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return TaskViewModel(tTaskDao, tTrainerProfileDao) as T
+                    return TaskViewModel(tTaskDao, tTrainerProfileDao, mItemDao, tItemDao) as T
                 }
             }
         }
@@ -44,9 +49,33 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     // ついに完成したTaskScreenを呼び出します！
-                    TaskScreen(viewModel = viewModel)
+//                    TaskScreen(viewModel = viewModel)
+                    AppNavigation(viewModel = viewModel)
                 }
             }
+        }
+    }
+
+    @Composable
+    fun AppNavigation(viewModel: TaskViewModel) {
+        // 現在の画面を管理する状態
+        var currentScreen by remember { mutableStateOf("home") }
+
+        when (currentScreen) {
+            "home" -> HomeScreen(
+                viewModel = viewModel,
+                onNavigateToTask = { currentScreen = "task" },
+                onNavigateToItem = { currentScreen = "item" }  // ★ 追加
+            )
+
+            "task" -> TaskScreen(
+                viewModel = viewModel,
+                onNavigateBack = { currentScreen = "home" }
+            )
+            "item" -> ItemScreen(  // ★ 追加
+                viewModel = viewModel,
+                onNavigateBack = { currentScreen = "home" }
+            )
         }
     }
 }
