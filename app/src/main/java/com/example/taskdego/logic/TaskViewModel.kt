@@ -2,13 +2,11 @@ package com.example.taskdego.logic
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.taskdego.data.dao.tTaskDao
-import com.example.taskdego.data.dao.tTrainerProfileDao
-import com.example.taskdego.data.dao.mItemDao
-import com.example.taskdego.data.dao.tItemDao
+import com.example.taskdego.data.dao.*
 import com.example.taskdego.data.entity.tTaskEntity
 import com.example.taskdego.data.entity.tTrainerProfileEntity
 import com.example.taskdego.data.entity.mItemEntity
+import com.example.taskdego.data.entity.mLocationSpawnEntity
 import com.example.taskdego.data.entity.tItemEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,7 +18,10 @@ import kotlinx.coroutines.launch
 class TaskViewModel(private val tTaskDao: tTaskDao,
                     private val tTrainerProfileDao: tTrainerProfileDao,
                     private val mItemDao: mItemDao,
-                    private val tItemDao: tItemDao
+                    private val tItemDao: tItemDao,
+                    private val mLocationDao: mLocationDao,             // ★ 追加
+                    private val mLocationSpawnDao: mLocationSpawnDao,    // ★ 追加
+                    private val mPokemonDao: mPokemonDao
     ): ViewModel() {
     val tasks = tTaskDao.getAllTasks().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 //    val trainer = tTrainerProfileDao.getTrainer().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000),
@@ -33,6 +34,14 @@ class TaskViewModel(private val tTaskDao: tTaskDao,
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         tTrainerProfileEntity(t_trainer_id = 1, trainer_name = "たろう", coins = 0, exp = 0)
+    )
+
+
+    // ★ 全ポケモン一覧
+    val allPokemons = mPokemonDao.getAllPokemons().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
     )
 
     // ★ アイテム一覧を取得
@@ -136,5 +145,44 @@ class TaskViewModel(private val tTaskDao: tTaskDao,
     suspend fun getItemWithName(tItem: tItemEntity): Pair<String, Int> {
         val masterItem = mItemDao.getItemById(tItem.m_item_id)
         return Pair(masterItem?.item_name ?: "不明なアイテム", tItem.quantity)
+    }
+
+    // ★ エリア一覧
+    val locations = mLocationDao.getAllLocations().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    // ★ エンカウントしたポケモン
+    private val _encounteredPokemon = MutableStateFlow<mLocationSpawnEntity?>(null)
+    val encounteredPokemon: StateFlow<mLocationSpawnEntity?> = _encounteredPokemon.asStateFlow()
+
+    // ★ エリアに入ってポケモンを抽選する
+    fun encounterPokemon(locationId: Int) {
+        viewModelScope.launch {
+            val spawns = mLocationSpawnDao.getSpawnsByLocation(locationId)
+            if (spawns.isEmpty()) return@launch
+
+            // 確率抽選
+            val totalRate = spawns.sumOf { it.spawn_rate }
+            val random = (1..totalRate).random()
+            var cumulative = 0
+            var result = spawns.last()
+
+            for (spawn in spawns) {
+                cumulative += spawn.spawn_rate
+                if (random <= cumulative) {
+                    result = spawn
+                    break
+                }
+            }
+            _encounteredPokemon.value = result
+        }
+    }
+
+    // ★ エンカウント状態をリセット
+    fun resetEncounter() {
+        _encounteredPokemon.value = null
     }
 }

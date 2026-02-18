@@ -21,7 +21,9 @@ import com.example.taskdego.logic.TaskViewModel
 fun HomeScreen(
     viewModel: TaskViewModel,
     onNavigateToTask: () -> Unit,
-    onNavigateToItem: () -> Unit // ★ 追加
+    onNavigateToAdventure: () -> Unit,  // ★ 追加
+    onNavigateToItem: () -> Unit, // ★ 追加
+    onNavigateToPokedex: () -> Unit  // ★ 追加
 ) {
     val trainer by viewModel.trainer.collectAsStateWithLifecycle()
 
@@ -131,6 +133,52 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     "タスク管理",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // 冒険ボタン（タスク管理の下に追加）
+            Button(
+                onClick = onNavigateToAdventure,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                )
+            ) {
+//                Icon(
+//                    imageVector = Icons.Default.Forest,
+//                    contentDescription = null,
+//                    modifier = Modifier.size(28.dp)
+//                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    "冒険に出かける！",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+
+            // ★ クロワ図鑑ボタン（新規追加）
+            Button(
+                onClick = onNavigateToPokedex,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                )
+            ) {
+                Text(
+                    "📖",
+                    fontSize = 28.sp
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    "クロワ図鑑",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
